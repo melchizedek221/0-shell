@@ -1,10 +1,5 @@
-use std::{fs, path::PathBuf};
+use std::{fs, path::Path};
 
 pub fn mkdir(args: &[&str]) -> std::io::Result<()> {
-    for arg in args {
-        let p = PathBuf::from(arg);
-        fs::create_dir(p)?;
-    }
-
-    Ok(())
+    args.iter().map(Path::new).try_for_each(fs::create_dir)
 }

@@ -3,22 +3,27 @@ use std::{
     io::{stdout, Write},
     path::PathBuf,
 };
+use colored::Colorize;
 
 pub fn cd(args: &[&str]) -> std::io::Result<()> {
-    if args.is_empty() {
-        #[allow(deprecated)]
-        if let Some(p) = env::home_dir() {
-            env::set_current_dir(p)?;
+    match args.len() {
+        0 => {
+            let home_dir = env::var("HOME").expect("O-shell: cd: HOME not set");
+            env::set_current_dir(home_dir)?;
         }
-    } else if args.len() != 1 {
-        stdout().write_all(b"O-shell: cd: too many arguments\n")?;
-    } else {
-        let p = PathBuf::from(args[0]);
-        if !p.exists() {
-            let s = format!("O-shell: cd: {:?}: No such file or directory\n", p);
-            stdout().write_all(s.replace('"', "").as_bytes())?;
+        1 => {
+            let path = PathBuf::from(args[0]);
+            if !path.exists() {
+                let s = format!("O-shell: cd: {}: No such file or directory\n", path.display()).red().bold();
+                stdout().write_all(s.as_bytes())?;
+                return Ok(());
+            }
+            env::set_current_dir(&path)?;
         }
-        env::set_current_dir(PathBuf::from(args[0]))?;
+        _ => {
+            let s =  "O-shell: cd: too many arguments\n".red().bold();
+            stdout().write_all(s.as_bytes())?;
+        }
     }
 
     Ok(())

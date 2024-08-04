@@ -1,62 +1,77 @@
 use std::{
     fs,
     io::{self, stdout, Write},
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
-pub fn mv(args: &[&str]) -> std::io::Result<()> {
-    if args.is_empty() {
-        stdout().write_all(b"mv: missing arguments\n")?
-    } else if args.len() != 2 {
-        stdout().write_all(b"mv: takes two arguments source destination\n")?;
-    } else {
-        let src = PathBuf::from(args[0]);
-        let dst = PathBuf::from(args[1]);
+use colored::Colorize;
 
-        if src == dst {
-            return Ok(());
-        }
-
-        if src.is_dir() {
-            // Handle moving directories
-            if dst.is_dir() {
-                let new_dest = dst.join(src.file_name().unwrap());
-                move_dir(&src, &new_dest)?;
-            } else {
-                // If destination is not a directory, treat it as a file path
-                move_dir(&src, &dst)?;
-            }
-        } else if dst.is_dir() {
-            let new_dest = dst.join(src.file_name().unwrap());
-            fs::rename(src, new_dest)?;
+pub fn mv(args: &[&str]) -> io::Result<()> {
+    if args.len() != 2 {
+        return write_message(if args.is_empty() {
+            "mv: missing arguments\n".red().bold()
         } else {
-            fs::rename(src, dst)?;
-        }
+            "mv: takes two arguments source destination\n".red().bold()
+        });
+    }
+
+    let src = PathBuf::from(args[0]);
+    let dst = PathBuf::from(args[1]);
+
+    if src == dst {
+        return Ok(());
+    }
+
+    if src.is_dir() {
+        move_directory(&src, &dst)?;
+    } else {
+        move_file_or_to_dir(&src, &dst)?;
     }
 
     Ok(())
 }
 
-/// Recursively move a directory and its contents to a new location.
-fn move_dir(src: &PathBuf, dest: &PathBuf) -> io::Result<()> {
-    // Create the destination directory
+fn write_message(message: colored::ColoredString) -> io::Result<()> {
+    stdout().write_all(message.as_bytes())
+}
+
+fn move_directory(src: &Path, dst: &Path) -> io::Result<()> {
+    let new_dest = if dst.is_dir() {
+        dst.join(src.file_name().unwrap())
+    } else {
+        dst.to_path_buf()
+    };
+
+    move_dir_recursive(src, &new_dest)?;
+    fs::remove_dir(src)
+}
+
+fn move_file_or_to_dir(src: &Path, dst: &Path) -> io::Result<()> {
+    let new_dest = if dst.is_dir() {
+        dst.join(src.file_name().unwrap())
+    } else {
+        dst.to_path_buf()
+    };
+
+    fs::rename(src, new_dest)
+}
+
+fn move_dir_recursive(src: &Path, dest: &Path) -> io::Result<()> {
     if !dest.exists() {
         fs::create_dir_all(dest)?;
     }
 
     for entry in fs::read_dir(src)? {
         let entry = entry?;
-        let src = entry.path();
-        let dest_path = dest.join(src.file_name().unwrap());
+        let src_path = entry.path();
+        let dest_path = dest.join(src_path.file_name().unwrap());
 
-        if src.is_dir() {
-            move_dir(&src, &dest_path)?;
+        if src_path.is_dir() {
+            move_dir_recursive(&src_path, &dest_path)?;
         } else {
-            fs::rename(&src, &dest_path)?;
+            fs::rename(&src_path, &dest_path)?;
         }
     }
 
-    // Remove the source directory after moving all contents
-    fs::remove_dir(src)?;
     Ok(())
 }

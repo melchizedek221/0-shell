@@ -1,35 +1,46 @@
+use colored::Colorize;
 use std::{
     fs,
-    io::{stdout, Write},
+    io::{self, stdout, Write},
     path::PathBuf,
 };
 
-pub fn rm(args: &[&str]) -> std::io::Result<()> {
-    if args.is_empty() || (args.len() == 1 && args[0].eq_ignore_ascii_case("-r")) {
-        stdout().write_all(b"rm: missing operand\n")?
-    } else if args[0].eq_ignore_ascii_case("-r") {
-        for arg in &args[1..] {
-            let p = PathBuf::from(arg);
-            if !p.exists() {
-                let s = format!("rm: cannot remove {:?}: No such file or directory\n", p);
-                stdout().write_all(s.replace('"', "").as_bytes())?;
-            } else if p.is_dir() {
-                fs::remove_dir_all(&p)?;
-            } else {
-                fs::remove_file(&p)?;
-            }
-        }
+fn remove_path(p: &PathBuf, recursive: bool) -> io::Result<()> {
+    if !p.exists() {
+        stdout().write_all(
+            format!("rm: cannot remove {:?}: No such file or directory\n", p)
+                .replace('"', "")
+                .red()
+                .bold()
+                .as_bytes(),
+        )?;
+    } else if p.is_dir() && recursive {
+        fs::remove_dir_all(p)?;
+    } else if p.is_file() && p.is_symlink() {
+        fs::remove_file(p)?;
     } else {
-        for arg in args {
+        stdout().write_all(
+            format!("rm: cannot remove {:?}: Not a file or directory\n", p)
+                .replace('"', "")
+                .red()
+                .bold()
+                .as_bytes(),
+        )?;
+    }
+    Ok(())
+}
+
+pub fn rm(args: &[&str]) -> io::Result<()> {
+    if args.is_empty() || (args.len() == 1 && args[0].eq_ignore_ascii_case("-r")) {
+        stdout().write_all("rm: missing operand\n".red().bold().as_bytes())?;
+    } else {
+        let recursive = args[0].eq_ignore_ascii_case("-r");
+        let paths = if recursive { &args[1..] } else { args };
+
+        for arg in paths {
             let p = PathBuf::from(arg);
-            if !p.exists() {
-                let s = format!("rm: cannot remove {:?}: No such file or directory\n", p);
-                stdout().write_all(s.replace('"', "").as_bytes())?;
-            } else {
-                fs::remove_file(&p)?;
-            }
+            remove_path(&p, recursive)?;
         }
     }
-
     Ok(())
 }

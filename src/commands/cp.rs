@@ -2,18 +2,14 @@ use std::{fs, path::PathBuf};
 
 pub fn cp(args: &[&str]) -> std::io::Result<()> {
     let src = PathBuf::from(args[0]);
-    let dst = PathBuf::from(args[1]);
+    let mut dst = PathBuf::from(args[1]);
+
+    if dst.is_dir() {
+        dst = dst.join(src.file_name().unwrap());
+    }
 
     if src.is_file() {
-        match dst.is_dir() {
-            true => {
-                let p = dst.join(src.clone());
-                fs::copy(src, p)?;
-            }
-            false => {
-                fs::copy(src.clone(), dst.clone())?;
-            }
-        }
+        fs::copy(src, dst)?;
     }
 
     Ok(())
