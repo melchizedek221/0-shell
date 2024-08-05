@@ -1,7 +1,9 @@
 mod commands;
 
+use colored::Colorize;
 use std::collections::HashMap;
-use std::io::{self, stdin, Write};
+use std::env;
+use std::io::{self, stdin, Error, ErrorKind, Write};
 
 use commands::{cat, cd, cp, echo, ls, mkdir, mv, pwd, rm};
 
@@ -26,21 +28,21 @@ fn main() {
             if e.kind() == io::ErrorKind::UnexpectedEof {
                 break;
             }
-            eprintln!("Error: {}", e);
+            eprintln!("{}", format!("Error: {}", e).red().to_string().as_str());
         }
     }
 }
 
 /// Runs the shell and executes commands based on user input
-///
-/// # Arguments
-///
-/// * `command_map` - A hashmap of commands and their corresponding functions to execute.
-/// # Errors
-///
-/// This function will return an error if the input stream cannot be read.
 fn run_shell(command_map: &HashMap<&str, CommandFn>) -> io::Result<()> {
-    print!("$ ");
+    let path = env::current_dir()?;
+    let path_str = format!("{:?}\n", path)
+        .trim_end()
+        .replace('"', "")
+        .cyan()
+        .bold();
+
+    print!("[{}] -> $ ", path_str);
     io::stdout().flush()?;
 
     let mut user_input = String::new();
@@ -63,7 +65,10 @@ fn run_shell(command_map: &HashMap<&str, CommandFn>) -> io::Result<()> {
             if let Some(&cmd_func) = command_map.get(cmd_input) {
                 cmd_func(&args[1..])?;
             } else {
-                eprintln!("Command '{}' not found", cmd_input);
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    format!("Command '{}' not found", cmd_input),
+                ));
             }
         }
     }

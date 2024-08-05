@@ -1,9 +1,8 @@
 use std::{
     env,
-    io::{stdout, Write},
+    io::{Error, ErrorKind},
     path::PathBuf,
 };
-use colored::Colorize;
 
 pub fn cd(args: &[&str]) -> std::io::Result<()> {
     match args.len() {
@@ -14,15 +13,18 @@ pub fn cd(args: &[&str]) -> std::io::Result<()> {
         1 => {
             let path = PathBuf::from(args[0]);
             if !path.exists() {
-                let s = format!("O-shell: cd: {}: No such file or directory\n", path.display()).red().bold();
-                stdout().write_all(s.as_bytes())?;
-                return Ok(());
+                return Err(Error::new(
+                    ErrorKind::Other,
+                    format!("O-shell: cd: {}: No such file or directory", path.display()),
+                ));
             }
             env::set_current_dir(&path)?;
         }
         _ => {
-            let s =  "O-shell: cd: too many arguments\n".red().bold();
-            stdout().write_all(s.as_bytes())?;
+            return Err(Error::new(
+                ErrorKind::Other,
+                "O-shell: cd: too many arguments",
+            ));
         }
     }
 

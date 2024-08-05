@@ -12,13 +12,53 @@ use std::time::UNIX_EPOCH;
 use tabular::{Row, Table};
 
 pub fn ls(args: &[&str]) -> io::Result<()> {
+    let (long_format, all_files, classify, paths) = parse_args(args);
+
+    for path in paths {
+        if path.is_dir() {
+            let entries: Vec<DirEntry> = get_dir_entries(&path)?;
+
+            if long_format {
+                let total_blocks = calculate_total_blocks(&entries, all_files)?;
+                print!(
+                    "total {}\n{}",
+                    total_blocks,
+                    format_long_output(&entries, all_files, classify)?
+                );
+            } else {
+                print!("{}", display(&entries, all_files, classify)?);
+            }
+        } else {
+            let metadata = fs::metadata(&path)?;
+            if long_format {
+                let (perm, nlink, username, group, size, last_time) = extract_file_info(&metadata)?;
+                println!(
+                    "{} {} {} {} {} {} {}",
+                    perm,
+                    nlink,
+                    username,
+                    group,
+                    size,
+                    last_time,
+                    path.to_string_lossy()
+                );
+            } else {
+                println!("{}", path.to_string_lossy());
+            }
+        }
+    }
+
+    Ok(())
+}
+
+fn parse_args(args: &[&str]) -> (bool, bool, bool, Vec<PathBuf>) {
     let mut long_format = false;
     let mut all_files = false;
     let mut classify = false;
-    let mut paths: Vec<PathBuf> = Vec::new();
+    let mut paths = Vec::new();
 
-    for arg in args {
-        match *arg {
+    for &arg in args {
+        match arg {
             "-l" => long_format = true,
             "-a" => all_files = true,
             "-F" => classify = true,
@@ -30,65 +70,57 @@ pub fn ls(args: &[&str]) -> io::Result<()> {
         paths.push(PathBuf::from("."));
     }
 
-    for path in paths {
-        if path.is_dir() {
-            let mut entries: Vec<DirEntry> =
-                fs::read_dir(&path)?.filter_map(|res| res.ok()).collect();
+    (long_format, all_files, classify, paths)
+}
 
-            entries.sort_by(|a, b| {
-                let binding = a.file_name();
-                let a_str = binding.to_string_lossy();
-                let binding = b.file_name();
-                let b_str = binding.to_string_lossy();
+/// Get all entries in a directory and sort them by filename.
+fn get_dir_entries(path: &PathBuf) -> io::Result<Vec<DirEntry>> {
+    let mut entries: Vec<DirEntry> = fs::read_dir(path)?.filter_map(|res| res.ok()).collect();
 
-                // Special case for "." and ".."
-                if a_str == "." && b_str == ".." {
-                    return Ordering::Less;
-                }
-                if a_str == ".." && b_str == "." {
-                    return Ordering::Greater;
-                }
+    entries.sort_by(|a, b| {
+        let a_str = a.file_name().to_string_lossy().into_owned();
+        let b_str = b.file_name().to_string_lossy().into_owned();
+        compare_entries(&a_str, &b_str)
+    });
 
-                // Determine the starting index for comparison
-                let a_start = if a_str.starts_with('.') { 1 } else { 0 };
-                let b_start = if b_str.starts_with('.') { 1 } else { 0 };
+    Ok(entries)
+}
 
-                // Compare the substrings starting from the determined indices
-                let a_sub = &a_str[a_start..];
-                let b_sub = &b_str[b_start..];
+/// Compares two strings based on their filename.
+fn compare_entries(a_str: &str, b_str: &str) -> Ordering {
+    let a_start = if a_str.starts_with('.') { 1 } else { 0 };
+    let b_start = if b_str.starts_with('.') { 1 } else { 0 };
 
-                a_sub.cmp(b_sub).then_with(|| a_str.cmp(&b_str))
-            });
+    let a_sub = &a_str[a_start..].to_lowercase();
+    let b_sub = &b_str[b_start..].to_lowercase();
 
-            let total_blocks = calculate_total_blocks(&entries, all_files)?;
+    a_sub.cmp(b_sub).then_with(|| a_str.cmp(b_str))
+}
 
-            if long_format {
-                println!("total {}", total_blocks);
-            }
-
-            if all_files {
-                let dot_metadata = fs::metadata(PathBuf::from("."))?;
-                display_entry(".", &dot_metadata, long_format, classify)?;
-                let parent_metadata = fs::metadata(PathBuf::from(".."))?;
-                display_entry("..", &parent_metadata, long_format, classify)?;
-            }
-
-            if long_format {
-                println!("{}", format_output(&entries, all_files, classify)?);
-            } else {
-                print!("{}", display(&entries, all_files, classify)?);
-            }
-        } else {
-            let metadata = fs::metadata(&path)?;
-            display_entry(&path.to_string_lossy(), &metadata, long_format, classify)?;
-        }
+/// Add color to the file name if it is a directory.
+fn colored_file_name_str(file_name: &str, metadata: &fs::Metadata) -> String {
+    if metadata.is_dir() {
+        file_name.blue().bold().to_string()
+    } else {
+        file_name.normal().to_string()
     }
-
-    Ok(())
 }
 
 fn display(entries: &[DirEntry], all_files: bool, classify: bool) -> io::Result<String> {
     let mut output = String::new();
+
+    if all_files {
+        let dot = ".".blue().bold().to_string();
+        let dot = if classify { dot + "/  " } else { dot + "  " };
+        output.push_str(&dot);
+        let parent = "..".blue().bold().to_string();
+        let parent = if classify {
+            parent + "/  "
+        } else {
+            parent + "  "
+        };
+        output.push_str(&parent);
+    }
     for (i, entry) in entries.iter().enumerate() {
         let file_name_str = entry.file_name().to_string_lossy().into_owned();
 
@@ -96,11 +128,7 @@ fn display(entries: &[DirEntry], all_files: bool, classify: bool) -> io::Result<
             continue;
         }
         let metadata = entry.metadata()?;
-        let file_name_str = if metadata.is_dir() {
-            file_name_str.blue().bold().to_string()
-        } else {
-            file_name_str.normal().to_string()
-        };
+        let file_name_str = colored_file_name_str(&file_name_str, &metadata);
         output.push_str(&format!(
             "{}{}",
             file_name_str,
@@ -115,37 +143,6 @@ fn display(entries: &[DirEntry], all_files: bool, classify: bool) -> io::Result<
     }
 
     Ok(output)
-}
-
-fn display_entry(
-    file_name: &str,
-    metadata: &fs::Metadata,
-    long_format: bool,
-    classify: bool,
-) -> io::Result<()> {
-    let file_name_str = if metadata.is_dir() {
-        file_name.blue().bold().to_string()
-    } else {
-        file_name.normal().to_string()
-    };
-
-    if long_format {
-        let file_name_str = file_name_str + &classify_suffix(metadata, classify);
-        let mode = metadata.mode();
-        let nlink = metadata.nlink();
-        let (username, group) = get_user_group_names(metadata.uid(), metadata.gid());
-        let size = metadata.size();
-        let perm = get_file_permission(metadata.is_dir(), mode);
-        let last_time = last_modified_time(metadata)?;
-        println!(
-            "{} {} {} {} {} {} {}",
-            perm, nlink, username, group, size, last_time, file_name_str
-        );
-    } else {
-        print!("{}{}  ", file_name_str, classify_suffix(metadata, classify));
-    }
-
-    Ok(())
 }
 
 fn classify_suffix(metadata: &fs::Metadata, classify: bool) -> String {
@@ -216,7 +213,7 @@ fn get_file_permission(is_dir: bool, mode: u32) -> String {
         group_exec,
         other_read,
         other_write,
-        other_exec,
+        other_exec
     )
 }
 
@@ -234,30 +231,52 @@ fn calculate_total_blocks(entries: &[DirEntry], for_hidden: bool) -> io::Result<
         total_blocks += parent_metadata.blocks();
     }
 
-    Ok(total_blocks / 2) // because blocks are in 512-byte units but we want 1024-byte units
+    Ok(total_blocks / 2)
 }
 
-fn format_output(entries: &[DirEntry], all_files: bool, classify: bool) -> io::Result<String> {
-    let mut table = Table::new("{:<} {:<} {:>} {:>} {:>} {:>} {:<}");
+fn format_long_output(entries: &[DirEntry], all_files: bool, classify: bool) -> io::Result<String> {
+    let mut table = Table::new("{:<} {:>} {:>} {:>} {:>} {:>} {:<}");
+
+    if all_files {
+        let dot_metadata = fs::metadata(PathBuf::from("."))?;
+        let (perm, nlink, username, group, size, last_time) = extract_file_info(&dot_metadata)?;
+        table.add_row(
+            Row::new()
+                .with_cell(perm)
+                .with_cell(nlink)
+                .with_cell(username)
+                .with_cell(group)
+                .with_cell(size)
+                .with_cell(last_time)
+                .with_cell(
+                    ".".blue().bold().to_string() + &classify_suffix(&dot_metadata, classify),
+                ),
+        );
+        let parent_metadata = fs::metadata(PathBuf::from(".."))?;
+        let (perm, nlink, username, group, size, last_time) = extract_file_info(&parent_metadata)?;
+        table.add_row(
+            Row::new()
+                .with_cell(perm)
+                .with_cell(nlink)
+                .with_cell(username)
+                .with_cell(group)
+                .with_cell(size)
+                .with_cell(last_time)
+                .with_cell(
+                    "..".blue().bold().to_string() + &classify_suffix(&parent_metadata, classify),
+                ),
+        );
+    }
     for entry in entries {
         let file_name_str = entry.file_name().to_string_lossy().into_owned();
         if !all_files && file_name_str.starts_with('.') {
             continue;
         }
         let metadata = entry.metadata()?;
-        let file_name_str = if metadata.is_dir() {
-            file_name_str.blue().bold().to_string()
-        } else {
-            file_name_str.normal().to_string()
-        };
-        let file_name_str = file_name_str + &classify_suffix(&metadata, classify);
 
-        let mode = metadata.mode();
-        let nlink = metadata.nlink();
-        let (username, group) = get_user_group_names(metadata.uid(), metadata.gid());
-        let size = metadata.size();
-        let perm = get_file_permission(metadata.is_dir(), mode);
-        let last_time = last_modified_time(&metadata)?;
+        let file_name_str = colored_file_name_str(&file_name_str, &metadata);
+        let file_name_str = file_name_str + &classify_suffix(&metadata, classify);
+        let (perm, nlink, username, group, size, last_time) = extract_file_info(&metadata)?;
 
         table.add_row(
             Row::new()
@@ -271,4 +290,16 @@ fn format_output(entries: &[DirEntry], all_files: bool, classify: bool) -> io::R
         );
     }
     Ok(format!("{}", table))
+}
+
+fn extract_file_info(
+    metadata: &fs::Metadata,
+) -> Result<(String, u64, String, String, u64, String), io::Error> {
+    let mode = metadata.mode();
+    let nlink = metadata.nlink();
+    let (username, group) = get_user_group_names(metadata.uid(), metadata.gid());
+    let size = metadata.size();
+    let perm = get_file_permission(metadata.is_dir(), mode);
+    let last_time = last_modified_time(metadata)?;
+    Ok((perm, nlink, username, group, size, last_time))
 }

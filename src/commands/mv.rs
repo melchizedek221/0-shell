@@ -1,18 +1,19 @@
 use std::{
     fs,
-    io::{self, stdout, Write},
+    io::{self, Error, ErrorKind},
     path::{Path, PathBuf},
 };
 
-use colored::Colorize;
-
 pub fn mv(args: &[&str]) -> io::Result<()> {
     if args.len() != 2 {
-        return write_message(if args.is_empty() {
-            "mv: missing arguments\n".red().bold()
+        if args.is_empty() {
+            return Err(Error::new(ErrorKind::Other, "mv: missing arguments"));
         } else {
-            "mv: takes two arguments source destination\n".red().bold()
-        });
+            return Err(Error::new(
+                ErrorKind::Other,
+                "mv: takes two arguments source destination",
+            ));
+        }
     }
 
     let src = PathBuf::from(args[0]);
@@ -29,10 +30,6 @@ pub fn mv(args: &[&str]) -> io::Result<()> {
     }
 
     Ok(())
-}
-
-fn write_message(message: colored::ColoredString) -> io::Result<()> {
-    stdout().write_all(message.as_bytes())
 }
 
 fn move_directory(src: &Path, dst: &Path) -> io::Result<()> {

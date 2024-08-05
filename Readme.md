@@ -9,25 +9,23 @@ This project aims to replicate some core functionalities of the shell program, p
 
 ## 🔧 Getting Started
 
-1. Prerequisites
-   Rust: Ensure that you have Rust installed. If not, install it from rust-lang.org.
-2. Installation
+1. Installation
 
 ```bash
 git clone https://learn.zone01dakar.sn/git/bindoye/0-shell/.git
 cd 0-shell
 ```
 
-3. Build the project
+2. Build and install the project
 
 ```bash
-cargo build --release
+cargo install --path .
 ```
 
-4. Run the shell
+3. Run the shell
 
 ```bash
-./target/release/0-shell
+0-shell
 ```
 
 ## 📜 Usage
@@ -52,3 +50,9 @@ The project utilizes several Rust crates to facilitate various functionalities:
 - `tabular`: For output formatting
 
 > These crates are included in the Cargo.toml file and will be automatically downloaded and built when you compile the project.
+
+## Bonus
+
+- Add colors to the errors, directories?
+- Add the current path behind the $?
+- Handle the Ctrl + C
