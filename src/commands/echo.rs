@@ -5,6 +5,7 @@ pub fn echo(args: &[&str]) -> std::io::Result<()> {
 
     stdout().write_all(data.as_bytes())?;
     stdout().write_all(b"\n")?;
+    stdout().flush()?;
 
     Ok(())
 }

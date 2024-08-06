@@ -5,14 +5,14 @@ use std::collections::HashMap;
 use std::env;
 use std::io::{self, stdin, Error, ErrorKind, Write};
 
-use commands::{cat, cd, cp, echo, ls, mkdir, mv, pwd, rm};
+use commands::{cat, cd, clear, cp, echo, ls, mkdir, mv, pwd, rm};
 
 type CommandFn = fn(&[&str]) -> io::Result<()>;
 
 fn main() {
     let mut command_map: HashMap<&str, CommandFn> = HashMap::new();
 
-    // Register commands
+    // Builtins commands
     command_map.insert("cat", cat);
     command_map.insert("cd", cd);
     command_map.insert("cp", cp);
@@ -22,6 +22,9 @@ fn main() {
     command_map.insert("mv", mv);
     command_map.insert("pwd", |_: &[&str]| pwd());
     command_map.insert("rm", rm);
+
+    // OTHER Command
+    command_map.insert("clear", |_: &[&str]| clear());
 
     loop {
         if let Err(e) = run_shell(&command_map) {

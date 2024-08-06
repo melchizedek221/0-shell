@@ -4,7 +4,7 @@ This project aims to replicate some core functionalities of the shell program, p
 
 ## ✨ Features
 
-- Built-in Commands: Implementation of several key commands like `ls`, `cd`, `pwd`, `echo`, `mv`
+- Built-in Commands: Implementation of several key commands like `cat`,`cd`, `cp`, `echo`,`ls`, `mkdir`,`mv`, `pwd`, `rm` 
 - Colored Output: Visual distinction of files and directories with colored outputs.
 
 ## 🔧 Getting Started
@@ -56,3 +56,4 @@ The project utilizes several Rust crates to facilitate various functionalities:
 - Add colors to the errors, directories?
 - Add the current path behind the $?
 - Handle the Ctrl + C
+- Add other command : `clear`

@@ -14,6 +14,8 @@ pub fn cat(args: &[&str]) -> std::io::Result<()> {
         }
     }
 
+    io::stdout().flush()?;
+
     Ok(())
 }
 
