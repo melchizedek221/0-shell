@@ -42,7 +42,7 @@ fn run_shell(command_map: &HashMap<&str, CommandFn>) -> io::Result<()> {
     let path_str = format!("{:?}\n", path)
         .trim_end()
         .replace('"', "")
-        .cyan()
+        .purple()
         .bold();
 
     print!("[{}] -> $ ", path_str);
